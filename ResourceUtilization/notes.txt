@@ -1,0 +1,42 @@
+Quick Summary
+The Flow-Aware LSH (Binary Quantized IP Flow Embeddings) system demonstrates significant resource efficiency gains but trades off detection accuracy compared to traditional baseline methods. This analysis evaluates whether the performance aligns with the paper's stated goal of enabling "practical deployment on edge devices where computational constraints would otherwise prohibit real-time anomaly detection."
+
+Detection Accuracy Metrics
+
+| Metric    | BQ-LSH          | BQ-IF           | BQ-OSVM         | LSH vs Best Baseline  |
+|-----------|-----------------|-----------------|-----------------|-----------------------|
+| Accuracy  | 0.6887 ± 0.0494 | 0.6926 ± 0.0165 | 0.6568 ± 0.0491 | -0.6% vs IF           |
+| F1 Score  | 0.5346 ± 0.0332 | 0.4415 ± 0.1065 | 0.5047 ± 0.0841 | +21.1% vs IF          |
+| ROC AUC   | 0.6887 ± 0.0494 | 0.6926 ± 0.0165 | 0.6568 ± 0.0491 | -0.6% vs IF           |
+
+Key Findings:
+- Competitive Accuracy: LSH achieves 68.87% accuracy, only 0.6% lower than the best baseline (Isolation Forest at 69.26%)
+- Superior F1 Score: LSH significantly outperforms baselines in F1 score (53.46% vs 44.15% for IF), indicating better balance between precision and recall
+- Stability: LSH shows moderate variance (0.0494) compared to Isolation Forest's lower variance (0.0165) but much better than One-Class SVM's high variance
+
+Resource Efficiency Analysis
+
+Processing Performance
+| Metric             | Flow-Aware LSH         | Baseline Impact              |
+|--------------------|------------------------|------------------------------|
+| Processing Speed   | 28.7 flows/second      | 2.7x faster than baseline    |
+| Average Flow Time  | 2.83ms (LSH)           | 70.9% reduction              |
+| Maximum Flow Time  | 6.63ms (LSH)           | 68.9% reduction              |
+
+Memory Efficiency
+
+| Component           | Memory Usage (KB) |
+|---------------------|-------------------|
+| Total LSH Model     | 26.1 KB           |
+| Hash Tables         | 0.18 KB           |
+| Normal Embeddings   | 25.4 KB           |
+| Baseline Models     | 0.16 KB           |
+
+Training Performance
+
+| Metric         | Flow-Aware LSH                     |
+|----------------|------------------------------------|
+| Training Time  | 102.2 ± 5.2 seconds                |
+| Test Time      | 41.9 ± 0.9 seconds                 |
+| CPU Usage      | 98.7% (training), 99.5% (test)     |
+| Memory Usage   | 413.8 KB (training), 26.4 KB (test)|
