@@ -23,8 +23,8 @@ EMB_SIZE = 64
 def run_single_experiment(seed: int = 42):
     try:
         # Try to load real data
-        train_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/PerformanceMetrics/UNSW_NB15_training-set.csv', low_memory=False)
-        test_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/PerformanceMetrics/UNSW_NB15_testing-set.csv', low_memory=False)
+        train_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/UNSW_NB15_training-set.csv', low_memory=False)
+        test_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/UNSW_NB15_testing-set.csv', low_memory=False)
         print(f"Loaded real UNSW-NB15 dataset (seed: {seed})")
     except:
         print("Cannot read data - please ensure UNSW-NB15 CSV files are in the current directory")
@@ -125,7 +125,7 @@ def run_multiple_experiments(num_runs: int = 5, base_seed: int = 42):
             continue  # Skip if the experiment failed
 
         # Reconstruct ground truth
-        test_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/PerformanceMetrics/UNSW_NB15_testing-set.csv', low_memory=False)
+        test_df = pd.read_csv('/home/pes1ug22am100/Documents/BinaryQuantization/UNSW_NB15_testing-set.csv', low_memory=False)
         test_df = test_df[test_df['label'].isin([0, 1])]
         normal_test = test_df[test_df['label'] == 0].sample(n=min(800, len(test_df[test_df['label'] == 0])), random_state=seed)
         anomaly_test = test_df[test_df['label'] == 1].sample(n=min(400, len(test_df[test_df['label'] == 1])), random_state=seed)
@@ -188,5 +188,5 @@ if __name__ == "__main__":
 
     # Optionally, save to CSV
     if results_df is not None:
-        results_df.to_csv(f"PerfromanceMetrics/results-{EMB_SIZE}.csv", index=False)
+        results_df.to_csv(f"PerformanceMetrics/results-{EMB_SIZE}.csv", index=False)
         print(f"Saved summary to results-{EMB_SIZE}.csv")
