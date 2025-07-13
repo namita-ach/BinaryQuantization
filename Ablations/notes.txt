@@ -1,0 +1,57 @@
+Ablation study review
+
+current performance:
+- accuracy: 65.6% (meh)
+- f1-score: 0.146 (YIKES)
+- auc: 0.760 (could be worse i guess)
+
+THE GOOD NEWS:
+found some super important features that actually matter:
+1. total_packets- this one is HUGE (67% importance)
+2. protocol- also really important (54%)
+3. bytes_per_packet- solid (39%)
+4. duration- decent (33%)
+5. total_bytes- okay (32%)
+6. packets_per_second- not bad (30%)
+
+THE BAD NEWS:
+some features are literally making things WORSE:
+- state_encoded: when i remove this, f1 goes from 0.146 to 0.379 (!!)
+- src_load: f1 jumps to 0.366 without it
+- load_ratio: f1 becomes 0.300 without it
+- src_bytes_ratio: f1 goes to 0.239 without it
+
+USELESS FEATURES:
+a bunch of features do literally nothing:
+- dst_packets, src_packets, dst_bytes, src_bytes
+- bytes_per_second, trans_depth, ct_src_dport_ltm
+- src_packets_ratio, ct_dst_sport_ltm, mean_packet_size
+removing them = exact same f1 score (0.146)
+
+CORRELATION MATRIX FINDINGS:
+- tons of features are basically the same thing (correlation > 0.9)
+- byte-related features are all super correlated
+- load features have perfect correlation (r ≈ 1.0)
+- rate features are also highly correlated
+
+WHAT I NEED TO DO:
+
+IMMEDIATE FIXES (should 2x my f1 score):
+1. DELETE the harmful features (state_encoded, src_load, load_ratio, src_bytes_ratio)
+- this alone should get me from f1=0.146 to f1~0.38
+2. keep only the top important features
+3. get rid of all the redundant stuff
+
+MEDIUM TERM:
+- fix the quantization (currently quantizing everything including useless features)
+- tune the algorithms better
+
+PRIORITY:
+1. remove bad features (HIGH- easy win)
+2. feature selection (MEDIUM- keep top 6-8)
+3. algorithm tuning (LOW- more complex)
+
+EXPECTED RESULTS:
+- removing bad features alone: f1 = 0.146 → 0.38 (160% improvement)
+- with all optimizations: hopefully f1 > 0.5
+- dream scenario: f1 > 0.7

@@ -1,0 +1,42 @@
+How BQ-LSH is doing well
+- High Recall (87.2%): 
+    - Captures almost all anomalies- critical on the edge where false negatives are costly.
+- Optimized Flow Speed: 
+    - Although total test time is longer, per-flow processing is highly optimized (~1.47 ms/flow on average).
+- Compact Model Footprint:
+    - LSH Model Size: ~26.2 KB
+    - Embedding tables, hash functions, quantizer, and IF/SVM baseline combined still fit under ~30 KB 
+- Predictable Resource Usage:
+    - Memory and CPU consumption are bounded and localized, unlike full-featured external services like Weaviate.
+    - No need to serialize/deserialize objects between components.
+- No Additional Infrastructure:
+    - BQ-LSH can run inline on the switch pipeline or edge node without needing HTTP APIs or Dockerized inference servers.
+    - Avoids Weaviate’s extra abstraction layer which adds latency and complexity.
+
+Weaviate drawbacks for edge
+- Requires additional container runtime  RAM, and CPU headroom.
+- Typical memory usage during training is ~256 KB, but Weaviate itself adds significant overhead:
+    - Weaviate server RAM footprint: ~400–800 MB idle
+    - Requires space for Docker images, GraphQL engine, and embedded vector DBs
+    - Full installation may consume >1 GB disk space.
+- Models like Isolation Forest/SVM in Weaviate are fast overall, but not flow-optimized- good throughput, but not real-time per-flow.
+- Low recall (22%) makes them unreliable for security-focused edge detection tasks.
+
+Performance
+| Metric                        | BQ-LSH              | Weaviate - Isolation Forest |
+|-------------------------------|---------------------|-----------------------------|
+| Recall                        | 87.2%               | 22.0%                       |
+| Avg Flow Time                 | 1.47 ms             | 6.83 ms                     |
+| Model Size                    | ~26 KB total        | 0.05 KB, but low recall     |
+| Flows per second              | ~170                | 5824, but not per-flow      |
+| Deployment Overhead           | Minimal             | >1 GB disk, 400+ MB RAM     |
+
+Efficiency Gains
+- Speed Efficiency (LSH vs Baseline): 1.36× faster
+- Memory Efficiency:
+  - LSH vs Isolation Forest: 558.67× more memory-efficient
+  - LSH vs One-Class SVM: 558.67× more memory-efficient
+
+TL;DR
+BQ-LSH is built for edge-native anomaly detection- fast, light, and with strong anomaly recall.
+Weaviate is better suited to centralized or cloud-based analysis where throughput and ease of integration matter more than tight resource control.

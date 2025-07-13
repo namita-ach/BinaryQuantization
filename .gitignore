@@ -1,0 +1,8 @@
+wenv
+weaviate
+weaviate-v1.27.19-linux-amd64.tar.gz
+LICENSE
+UNSW_NB15_testing-set.csv
+UNSW_NB15_training-set.csv
+data
+___pycache__
