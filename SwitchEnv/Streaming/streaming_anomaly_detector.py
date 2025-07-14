@@ -45,16 +45,14 @@ from anomaly_detection import FlowAwareLSHAnomalyDetector, StreamingEmbedder
 from flow_processing import FlowFeatureExtractor, FlowAwareBinaryQuantizer
 from resource_metrics import ResourceMonitor
 
-class OVSFlowInjector:
-    """Injects CSV flow data into OVS as synthetic flows"""
+class OVSFlowInjector: #Injects CSV flow data into OVS as synthetic flows
     
     def __init__(self, bridge_name=OVS_BRIDGE):
         self.bridge_name = bridge_name
         self.flow_table = {}
         self.verify_ovs_setup()
     
-    def verify_ovs_setup(self):
-        """Verify OVS bridge exists and is configured"""
+    def verify_ovs_setup(self): #Verify OVS bridge exists and is configured
         try:
             result = subprocess.run(['ovs-vsctl', 'br-exists', self.bridge_name], 
                                   capture_output=True, text=True)
@@ -70,8 +68,7 @@ class OVSFlowInjector:
             print(f"Error setting up OVS: {e}")
             sys.exit(1)
     
-    def configure_netflow(self):
-        """Configure NetFlow export for flow monitoring"""
+    def configure_netflow(self): #Configure NetFlow export for flow monitoring
         try:
             # Remove existing NetFlow config
             subprocess.run(['ovs-vsctl', 'clear', 'bridge', self.bridge_name, 'netflow'], 
@@ -93,7 +90,6 @@ class OVSFlowInjector:
             print(f"Warning: Could not configure NetFlow: {e}")
     
     def create_flow_entry(self, flow_data):
-        """Create OVS flow entry from CSV data"""
         try:
             # Extract key fields from CSV flow
             src_ip = flow_data.get('srcip', '192.168.1.1')
@@ -152,20 +148,16 @@ class OVSFlowInjector:
             return False
     
     def simulate_packet_flow(self, flow_data):
-        """Simulate packet flow to generate statistics"""
         try:
             # Get packet and byte counts from CSV
             packets = flow_data.get('spkts', 1) + flow_data.get('dpkts', 1)
             bytes_count = flow_data.get('sbytes', 64) + flow_data.get('dbytes', 64)
             
-            # For simulation, we'll create a dummy flow entry that generates stats
-            # In a real scenario, this would be actual network traffic
             
         except Exception as e:
             print(f"Error simulating packet flow: {e}")
 
 class OVSFlowCollector:
-    """Collects flows from OVS via NetFlow"""
     
     def __init__(self, port=NETFLOW_PORT):
         self.port = port
@@ -174,7 +166,6 @@ class OVSFlowCollector:
         self.flow_queue = queue.Queue()
     
     def start_collector(self):
-        """Start NetFlow collector"""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.bind(('127.0.0.1', self.port))
@@ -197,10 +188,7 @@ class OVSFlowCollector:
             print(f"Error starting NetFlow collector: {e}")
     
     def parse_netflow_packet(self, data):
-        """Parse NetFlow packet (simplified)"""
         try:
-            # This is a simplified NetFlow parser
-            # In practice, you'd need a full NetFlow v5/v9/IPFIX parser
             return {
                 'timestamp': time.time(),
                 'src_ip': '192.168.1.1',
@@ -216,7 +204,6 @@ class OVSFlowCollector:
             return None
     
     def stop_collector(self):
-        """Stop NetFlow collector"""
         self.running = False
         if self.socket:
             self.socket.close()
@@ -227,6 +214,9 @@ class OVSStreamingAnomalyDetector:
         self.embedding_size = embedding_size
         self.embedder = None
         self.resource_monitor = ResourceMonitor()
+        
+        # Predefined seeds for consistency
+        self.seeds = [355, 1307, 6390, 9026, 2997, 9766, 1095, 4926, 276, 8706]
         
         # OVS components
         self.ovs_injector = OVSFlowInjector()
@@ -253,6 +243,12 @@ class OVSStreamingAnomalyDetector:
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
+    def get_random_seed(self):
+        """Get a random seed from the predefined list"""
+        selected_seed = random.choice(self.seeds)
+        print(f"Using random seed: {selected_seed}")
+        return selected_seed
+
     def signal_handler(self, sig, frame):
         print(f"\nReceived signal {sig}. Shutting down gracefully...")
         self.streaming_active = False
@@ -262,7 +258,6 @@ class OVSStreamingAnomalyDetector:
         sys.exit(0)
 
     def cleanup_ovs_flows(self):
-        """Clean up OVS flows on shutdown"""
         try:
             subprocess.run(['ovs-ofctl', 'del-flows', OVS_BRIDGE], 
                           capture_output=True, text=True)
@@ -270,14 +265,18 @@ class OVSStreamingAnomalyDetector:
         except Exception as e:
             print(f"Error cleaning up OVS flows: {e}")
 
-    def load_and_prepare_data(self, seed=42):
-        print("Loading datasets...")
+    def load_and_prepare_data(self, seed=None):
+        """Load and prepare data with random seed from predefined list"""
+        if seed is None:
+            seed = self.get_random_seed()
+        
+        print(f"Loading datasets with seed {seed}...")
         try:
             train_df = pd.read_csv(TRAIN_FILE, low_memory=False)
             test_df = pd.read_csv(TEST_FILE, low_memory=False)
         except Exception as e:
             print(f"Error loading data: {str(e)}")
-            return None, None
+            return None, None, seed
 
         # Convert labels
         def fix_labels(df):
@@ -288,22 +287,24 @@ class OVSStreamingAnomalyDetector:
         train_df = fix_labels(train_df)
         test_df = fix_labels(test_df)
 
-        # Sample training data (normal flows only)
+        # Sample training data (normal flows only) with random seed
         normal_train = train_df[train_df['label'] == 0].sample(
             n=min(3000, len(train_df[train_df['label'] == 0])),
             random_state=seed
         )
 
-        # Prepare streaming test data
+        # Prepare streaming test data with random seed
         test_sample = test_df.sample(n=min(STREAM_SAMPLES, len(test_df)), random_state=seed)
         
         print(f"Training on {len(normal_train)} normal flows")
         print(f"Streaming {len(test_sample)} test flows through OVS")
+        print(f"Normal flows in test set: {len(test_sample[test_sample['label'] == 0])}")
+        print(f"Anomalous flows in test set: {len(test_sample[test_sample['label'] == 1])}")
         
-        return normal_train.to_dict('records'), test_sample
+        return normal_train.to_dict('records'), test_sample, seed
 
-    def train_models(self, train_flows, seed=42):
-        print("Training anomaly detection models...")
+    def train_models(self, train_flows, seed):
+        print(f"Training anomaly detection models with seed {seed}...")
         
         self.embedder = StreamingEmbedder(embedding_size=self.embedding_size)
         
@@ -328,7 +329,6 @@ class OVSStreamingAnomalyDetector:
         }
 
     def ovs_flow_injector_thread(self, test_df):
-        """Thread that injects CSV flows into OVS"""
         print("Starting OVS flow injection...")
         
         for _, flow in test_df.iterrows():
@@ -350,8 +350,7 @@ class OVSStreamingAnomalyDetector:
         
         print("OVS flow injection finished")
 
-    def ovs_flow_collector_thread(self):
-        """Thread that collects flows from OVS via NetFlow"""
+    def ovs_flow_collector_thread(self): #Thread that collects flows from OVS via NetFlow
         print("Starting OVS flow collection...")
         
         # Start NetFlow collector in separate thread
@@ -374,8 +373,7 @@ class OVSStreamingAnomalyDetector:
         
         print("OVS flow collection finished")
 
-    def flow_processor(self):
-        """Consumer thread that processes flows and detects anomalies"""
+    def flow_processor(self): #Consumer thread that processes flows and detects anomalies
         print("Starting flow processor...")
         
         batch_flows = []
@@ -406,7 +404,6 @@ class OVSStreamingAnomalyDetector:
         print("Flow processor finished")
 
     def process_batch(self, flows, labels):
-        """Process a batch of flows"""
         start_time = time.time()
         
         # Get predictions from all models
@@ -509,6 +506,7 @@ class OVSStreamingAnomalyDetector:
         print(f"Total flows processed: {self.processed_flows}")
         print(f"Average processing rate: {self.processed_flows/total_time:.2f} flows/sec")
         print(f"OVS Bridge used: {OVS_BRIDGE}")
+        print(f"Random seed used: {getattr(self, 'current_seed', 'Unknown')}")
         
         # Calculate metrics for each model
         model_metrics = {}
@@ -553,6 +551,7 @@ class OVSStreamingAnomalyDetector:
             performance_data.append({
                 'Model': model_name,
                 'Timestamp': timestamp,
+                'Random_Seed': getattr(self, 'current_seed', 'Unknown'),
                 'Total_Time': total_time,
                 'Flows_Processed': self.processed_flows,
                 'Flows_Per_Second': self.processed_flows / total_time if total_time > 0 else 0,
@@ -585,11 +584,20 @@ class OVSStreamingAnomalyDetector:
         
         print(f"\nResults saved to {RESULTS_DIR}/")
 
-    def run_streaming_detection(self, seed=42):
+    def run_streaming_detection(self, seed=None):
         print("="*60)
         print("OVS STREAMING NETWORK FLOW ANOMALY DETECTION")
         print("="*60)
+        
+        # Load and prepare data with random seed
+        train_flows, test_df, used_seed = self.load_and_prepare_data(seed)
+        self.current_seed = used_seed  # Store for reporting
+        
+        if train_flows is None or test_df is None:
+            return
+            
         print(f"Configuration:")
+        print(f"  Random seed: {used_seed}")
         print(f"  Stream samples: {STREAM_SAMPLES}")
         print(f"  Batch size: {BATCH_SIZE}")
         print(f"  Embedding size: {EMB_SIZE}")
@@ -598,13 +606,8 @@ class OVSStreamingAnomalyDetector:
         print(f"  NetFlow Port: {NETFLOW_PORT}")
         print(f"  Results directory: {RESULTS_DIR}")
         
-        # Load and prepare data
-        train_flows, test_df = self.load_and_prepare_data(seed)
-        if train_flows is None or test_df is None:
-            return
-        
         # Train models
-        training_info = self.train_models(train_flows, seed)
+        training_info = self.train_models(train_flows, used_seed)
         
         # Start streaming detection
         self.start_streaming(test_df)
@@ -616,14 +619,23 @@ class OVSStreamingAnomalyDetector:
 
 def main():
     parser = argparse.ArgumentParser(description='OVS Streaming Network Flow Anomaly Detection')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--seed', type=int, help='Random seed (if not provided, will use random from predefined list)')
     parser.add_argument('--samples', type=int, help='Number of samples to process (overrides env var)')
     parser.add_argument('--batch-size', type=int, help='Batch size (overrides env var)')
     parser.add_argument('--embedding-size', type=int, help='Embedding size (overrides env var)')
     parser.add_argument('--bridge', type=str, help='OVS bridge name (overrides env var)')
     parser.add_argument('--netflow-port', type=int, help='NetFlow port (overrides env var)')
+    parser.add_argument('--list-seeds', action='store_true', help='List available random seeds')
     
     args = parser.parse_args()
+    
+    # List available seeds if requested
+    if args.list_seeds:
+        detector = OVSStreamingAnomalyDetector()
+        print("Available random seeds:")
+        for i, seed in enumerate(detector.seeds):
+            print(f"  {i+1}: {seed}")
+        return
     
     # Override environment variables if provided
     if args.samples:
