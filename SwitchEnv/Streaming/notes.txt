@@ -1,0 +1,28 @@
+# First time setup (creates venv and installs everything)
+./run_streaming_detector.sh --samples 1000
+
+# Clean installation (removes existing venv)
+./run_streaming_detector.sh --clean-install --samples 500
+
+# Skip venv setup (use existing)
+./run_streaming_detector.sh --skip-venv --samples 2000
+
+# Custom configuration (remove existing venv and reinstall)
+./run_streaming_detector.sh -s 1500 -b 150 -e 128 --clean-install
+
+BUT FIRST chmod +x run_streaming_detector.sh
+
+
+
+Remember:
+-s, --samples NUM         Number of samples to process (default: $DEFAULT_STREAM_SAMPLES)
+-b, --batch-size NUM      Batch size for processing (default: $DEFAULT_BATCH_SIZE)
+-e, --embedding-size NUM  Embedding size (default: $DEFAULT_EMBEDDING_SIZE)
+-i, --interval FLOAT      Sleep interval between flows in seconds (default: $DEFAULT_SLEEP_INTERVAL)
+-r, --results-dir PATH    Results directory (default: $DEFAULT_RESULTS_DIR)
+-t, --train-file PATH     Training dataset file path
+--test-file PATH          Test dataset file path
+--seed NUM                Random seed (default: 42)
+--skip-venv               Skip virtual environment setup (use existing)
+--clean-install           Remove existing virtual environment and reinstall
+-h, --help                Show this help message
