@@ -1,0 +1,44 @@
+# Make script executable
+chmod +x ovs_statistical_benchmark.py
+#Run benchmark (will automatically create OVS bridge)
+./ovs_statistical_benchmark.py
+# To run without OVS setup (pure benchmarking):
+# OVS_SETUP=false ovs_statistical_benchmark.py
+
+
+
+
+
+Statistical:
+=== FINAL SUMMARY ===
+============================================================
+
+Model Performance:
+
+Flow_Aware_LSH:
+accuracy: 0.5642 ± 0.0438
+precision: 0.4273 ± 0.0261
+recall: 0.8727 ± 0.1012
+f1_score: 0.5709 ± 0.0302
+roc_auc: 0.7353 ± 0.0423
+
+Isolation_Forest:
+accuracy: 0.7001 ± 0.0372
+precision: 0.5585 ± 0.0774
+recall: 0.4052 ± 0.1172
+f1_score: 0.4662 ± 0.1068
+roc_auc: 0.6988 ± 0.0179
+
+One_Class_SVM:
+accuracy: 0.7050 ± 0.0268
+precision: 0.5667 ± 0.0431
+recall: 0.4653 ± 0.0825
+f1_score: 0.5095 ± 0.0657
+roc_auc: 0.6679 ± 0.0327
+
+Resource Usage:
+train_time_seconds: 17.79 ± 0.37                                                                                                                                                      .----.   @   @
+test_time_seconds: 7.26 ± 0.29                                                                                                                                                       / .-"-.`.  \v/
+flows_per_second: 165.44 ± 6.64                                                                                                                                                      | | '\ \ \_/ )
+total_lsh_model_kb: 26.19 ± 0.00                                                                                                                                                   ,-\ `-.' /.'  /
+total_baseline_models_kb: 0.14 ± 0.00  
