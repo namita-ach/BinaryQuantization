@@ -29,9 +29,9 @@ RESULTS_DIR = "resource-results"
 TRAIN_FILE = "/home/pes1ug22am100/Documents/IP-flow-vector-embeddings/BinaryQuantization/Refactored-resource/UNSW_NB15_training-set.csv"
 TEST_FILE = "/home/pes1ug22am100/Documents/IP-flow-vector-embeddings/BinaryQuantization/Refactored-resource/UNSW_NB15_testing-set.csv"
 
-from anomaly_detection import FlowAwareLSHAnomalyDetector, StreamingEmbedder
-from flow_processing import FlowFeatureExtractor, FlowAwareBinaryQuantizer
-from resource_metrics import ResourceMonitor
+from SwitchEnv.StatisticalTesting.anomaly_detection import FlowAwareLSHAnomalyDetector, StreamingEmbedder
+from SwitchEnv.StatisticalTesting.flow_processing import FlowFeatureExtractor, FlowAwareBinaryQuantizer
+from SwitchEnv.StatisticalTesting.resource_metrics import ResourceMonitor
 
 class StatisticalBenchmark:
     def __init__(self, embedding_size=EMB_SIZE):
