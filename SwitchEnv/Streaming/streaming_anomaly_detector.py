@@ -235,6 +235,7 @@ class OVSStreamingAnomalyDetector:
         self.detection_scores = []
         self.processing_times = []
         self.memory_usage = []
+        self.anomalous_flows = []  # Store anomalous flows for CSV export
         
         # Model results storage
         self.model_results = defaultdict(lambda: defaultdict(list))
@@ -421,6 +422,22 @@ class OVSStreamingAnomalyDetector:
                 self.model_results[model_name]['processing_times'].append(batch_time)
                 self.model_results[model_name]['memory_usage'].append(current_memory)
             
+            # Check for anomalies and log them (using first model's predictions)
+            first_model = list(all_results.keys())[0]
+            predictions, scores = all_results[first_model]
+            
+            for i, (flow, prediction, score, true_label) in enumerate(zip(flows, predictions, scores, labels)):
+                if prediction:  # Anomaly detected
+                    print(f"ANOMALY DETECTED {flow}")
+                    
+                    # Store anomalous flow with detection info
+                    anomaly_record = flow.copy()
+                    anomaly_record['detection_score'] = score
+                    anomaly_record['true_label'] = true_label
+                    anomaly_record['timestamp'] = datetime.now().isoformat()
+                    anomaly_record['detected_by_model'] = first_model
+                    self.anomalous_flows.append(anomaly_record)
+            
             self.processed_flows += len(flows)
             
             # Print progress
@@ -431,7 +448,7 @@ class OVSStreamingAnomalyDetector:
                 
         except Exception as e:
             print(f"Error processing batch: {e}")
-
+            
     def start_streaming(self, test_df):
         print(f"Starting OVS streaming detection for {len(test_df)} flows...")
         print(f"OVS Bridge: {OVS_BRIDGE}")
@@ -505,6 +522,7 @@ class OVSStreamingAnomalyDetector:
         print(f"Total processing time: {total_time:.2f} seconds")
         print(f"Total flows processed: {self.processed_flows}")
         print(f"Average processing rate: {self.processed_flows/total_time:.2f} flows/sec")
+        print(f"Total anomalies detected: {len(self.anomalous_flows)}")
         print(f"OVS Bridge used: {OVS_BRIDGE}")
         print(f"Random seed used: {getattr(self, 'current_seed', 'Unknown')}")
         
@@ -580,7 +598,15 @@ class OVSStreamingAnomalyDetector:
                 pd.DataFrame(detailed_data).to_csv(
                     f"{RESULTS_DIR}/ovs_streaming_detailed_{model_name}_{timestamp}.csv",
                     index=False
-                )
+                )        
+                # Save anomalous flows to CSV
+                if self.anomalous_flows:
+                    anomalies_df = pd.DataFrame(self.anomalous_flows)
+                    anomalies_df.to_csv(
+                        f"{RESULTS_DIR}/ovs_anomalous_flows_{timestamp}.csv",
+                        index=False
+                    )
+                    print(f"Saved {len(self.anomalous_flows)} anomalous flows to ovs_anomalous_flows_{timestamp}.csv")
         
         print(f"\nResults saved to {RESULTS_DIR}/")
 

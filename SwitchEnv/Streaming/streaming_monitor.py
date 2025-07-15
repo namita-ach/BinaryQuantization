@@ -23,6 +23,9 @@ class StreamingMonitor:
         self.refresh_interval = refresh_interval
         self.monitoring = False
         self.process_pid = None
+        self.anomaly_count = 0
+        self.last_anomaly_time = None
+        self.anomaly_rate_history = deque(maxlen=50)  # Track anomaly detection rate
         
         # Metrics tracking
         self.metrics_history = defaultdict(lambda: deque(maxlen=100))
@@ -205,6 +208,19 @@ class StreamingMonitor:
             return f"{eta_seconds/60:.1f} minutes"
         else:
             return f"{eta_seconds/3600:.1f} hours"
+
+    def colorize_status(self, status):
+        """Add colors to status indicators"""
+        colors = {
+            'running': '\033[92m',  # Green
+            'sleeping': '\033[93m', # Yellow
+            'stopped': '\033[91m',  # Red
+            'zombie': '\033[91m',   # Red
+            'RESET': '\033[0m'      # Reset
+        }
+        
+        color = colors.get(status.lower(), colors['RESET'])
+        return f"{color}{status}{colors['RESET']}"
     
     def print_footer(self):
         """Print monitor footer"""
@@ -235,47 +251,232 @@ class StreamingMonitor:
                     
                     # Get process metrics
                     proc_metrics = self.get_process_metrics(pid)
-                    self.print_process_status(pid, proc_metrics)
                     
-                    # Get latest results
+                    # Print process status with colors
+                    print(f"\n⚙️  Process Status (PID: {pid}):")
+                    print("-" * 40)
+                    
+                    if proc_metrics:
+                        status_colored = self.colorize_status(proc_metrics['status'])
+                        print(f"Status: {status_colored}")
+                        print(f"CPU Usage: {proc_metrics['cpu_percent']:.1f}%")
+                        print(f"Memory Usage: {proc_metrics['memory_mb']:.1f} MB")
+                        print(f"Threads: {proc_metrics['num_threads']}")
+                        
+                        # Add CPU/Memory bars
+                        cpu_bar = "█" * int(proc_metrics['cpu_percent'] / 5) + "░" * (20 - int(proc_metrics['cpu_percent'] / 5))
+                        mem_bar = "█" * int(min(proc_metrics['memory_mb'] / 50, 20)) + "░" * (20 - int(min(proc_metrics['memory_mb'] / 50, 20)))
+                        print(f"CPU: [{cpu_bar}] {proc_metrics['cpu_percent']:.1f}%")
+                        print(f"MEM: [{mem_bar}] {proc_metrics['memory_mb']:.1f} MB")
+                    else:
+                        print("❌ Process not found or access denied")
+                    
+                    # Get flow progress
+                    current_flows, target_flows, flows_per_sec = self.get_flow_progress()
+                    
+                    # Show progress bar
+                    print(f"\n📊 Processing Progress:")
+                    print("-" * 40)
+                    self.print_progress_bar(current_flows, target_flows)
+                    print(f"Flows: {current_flows:,}/{target_flows:,} | Rate: {flows_per_sec:.2f}/sec")
+                    
+                    if current_flows > 0 and current_flows < target_flows:
+                        eta = self.estimate_completion(current_flows, target_flows, flows_per_sec)
+                        print(f"🕒 ETA: {eta}")
+                    elif current_flows >= target_flows:
+                        print("✅ Processing completed!")
+                    
+                    # Show anomaly status
+                    self.print_anomaly_status()
+                    
+                    # Get latest results and show performance
                     results = self.get_latest_results()
-                    self.print_performance_metrics(results)
+                    if results:
+                        print(f"\n📈 Model Performance:")
+                        print("-" * 40)
+                        for result in results:
+                            model_name = result.get('Model', 'Unknown')
+                            accuracy = result.get('accuracy', 0)
+                            precision = result.get('precision', 0)
+                            recall = result.get('recall', 0)
+                            f1 = result.get('f1_score', 0)
+                            roc_auc = result.get('roc_auc', 0)
+                            
+                            # Create performance indicators
+                            acc_indicator = "🟢" if accuracy > 0.9 else "🟡" if accuracy > 0.7 else "🔴"
+                            f1_indicator = "🟢" if f1 > 0.8 else "🟡" if f1 > 0.6 else "🔴"
+                            
+                            print(f"{model_name}:")
+                            print(f"  {acc_indicator} Accuracy: {accuracy:.4f} | Precision: {precision:.4f}")
+                            print(f"  {f1_indicator} Recall: {recall:.4f} | F1-Score: {f1:.4f}")
+                            print(f"  📊 ROC-AUC: {roc_auc:.4f}")
+                            
+                            # Show detection stats
+                            anomalies_detected = result.get('anomalies_detected', 0)
+                            total_samples = result.get('total_samples', 0)
+                            if total_samples > 0:
+                                detection_rate = (anomalies_detected / total_samples) * 100
+                                print(f"  🚨 Anomaly Rate: {detection_rate:.2f}% ({anomalies_detected}/{total_samples})")
+                            print()
                     
-                    # Show live stats
+                    # Show live stats with trend
                     self.print_live_stats(pid)
                     
                     # Monitor file system
-                    self.monitor_file_system()
+                    print(f"\n📁 Result Files:")
+                    print("-" * 40)
+                    if os.path.exists(self.results_dir):
+                        files = os.listdir(self.results_dir)
+                        csv_files = [f for f in files if f.endswith('.csv')]
+                        anomaly_files = [f for f in csv_files if 'anomalous_flows' in f]
+                        perf_files = [f for f in csv_files if 'streaming_performance' in f]
+                        detailed_files = [f for f in csv_files if 'streaming_detailed' in f]
+                        
+                        print(f"📊 Performance files: {len(perf_files)}")
+                        print(f"🚨 Anomaly files: {len(anomaly_files)}")
+                        print(f"📋 Detailed files: {len(detailed_files)}")
+                        
+                        # Show latest files
+                        if csv_files:
+                            print("\nLatest files:")
+                            for file in sorted(csv_files)[-3:]:  # Show last 3 files
+                                file_path = os.path.join(self.results_dir, file)
+                                size = os.path.getsize(file_path)
+                                mtime = os.path.getmtime(file_path)
+                                time_str = datetime.fromtimestamp(mtime).strftime('%H:%M:%S')
+                                
+                                # Add file type indicator
+                                if 'anomalous_flows' in file:
+                                    icon = "🚨"
+                                elif 'streaming_performance' in file:
+                                    icon = "📊"
+                                elif 'streaming_detailed' in file:
+                                    icon = "📋"
+                                else:
+                                    icon = "📄"
+                                
+                                print(f"  {icon} {file[:45]:<45} {size:>6} bytes {time_str}")
+                    else:
+                        print("❌ Results directory not found")
                     
-                    # Show estimated completion
-                    if results:
-                        for result in results:
-                            flows_processed = result.get('Flows_Processed', 0)
-                            flows_per_sec = result.get('Flows_Per_Second', 0)
-                            target_flows = int(os.environ.get('STREAM_SAMPLES', 1000))
-                            
-                            if flows_processed < target_flows:
-                                eta = self.estimate_completion(flows_processed, target_flows, flows_per_sec)
-                                print(f"\nEstimated completion: {eta}")
-                                self.print_progress_bar(flows_processed, target_flows)
-                            else:
-                                print(f"\nProcessing completed!")
+                    # Show system resources
+                    print(f"\n💻 System Resources:")
+                    print("-" * 40)
+                    cpu_percent = psutil.cpu_percent(interval=0.1)
+                    memory = psutil.virtual_memory()
+                    disk = psutil.disk_usage(self.results_dir if os.path.exists(self.results_dir) else '/')
+                    
+                    print(f"System CPU: {cpu_percent:.1f}%")
+                    print(f"System Memory: {memory.percent:.1f}% ({memory.used/1024/1024/1024:.1f}GB used)")
+                    print(f"Disk Usage: {disk.percent:.1f}% ({disk.free/1024/1024/1024:.1f}GB free)")
+                    
+                    # Show network activity if available
+                    try:
+                        net_io = psutil.net_io_counters()
+                        print(f"Network: {net_io.bytes_sent/1024/1024:.1f}MB sent, {net_io.bytes_recv/1024/1024:.1f}MB recv")
+                    except:
+                        pass
                     
                     self.print_footer()
                     
                 else:
-                    print(f"No streaming process found. Waiting... ({datetime.now().strftime('%H:%M:%S')})")
+                    print(f"❌ No streaming process found. Waiting... ({datetime.now().strftime('%H:%M:%S')})")
                     self.process_pid = None
+                    
+                    # Show available processes for debugging
+                    streaming_processes = []
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                        try:
+                            if 'python' in proc.info['name'].lower():
+                                cmdline = ' '.join(proc.info['cmdline'])
+                                if 'streaming' in cmdline or 'anomaly' in cmdline:
+                                    streaming_processes.append((proc.info['pid'], proc.info['name'], cmdline))
+                        except:
+                            continue
+                    
+                    if streaming_processes:
+                        print("Found related processes:")
+                        for pid, name, cmdline in streaming_processes[:3]:
+                            print(f"  PID {pid}: {name} - {cmdline[:60]}...")
                 
                 time.sleep(self.refresh_interval)
                 
             except KeyboardInterrupt:
-                print("\nMonitoring stopped by user")
+                print("\n👋 Monitoring stopped by user")
                 self.monitoring = False
                 break
             except Exception as e:
-                print(f"Error in monitoring: {e}")
+                print(f"❌ Error in monitoring: {e}")
                 time.sleep(self.refresh_interval)
+
+    def get_flow_progress(self):
+        """Get current flow processing progress"""
+        # Try to read from log files or process output
+        target_flows = int(os.environ.get('STREAM_SAMPLES', 1000))
+        
+        # Look for progress in latest results
+        results = self.get_latest_results()
+        if results:
+            for result in results:
+                current_flows = result.get('Flows_Processed', 0)
+                flows_per_sec = result.get('Flows_Per_Second', 0)
+                return current_flows, target_flows, flows_per_sec
+        
+        return 0, target_flows, 0
+
+    def print_anomaly_status(self):
+        """Print real-time anomaly detection status"""
+        anomaly_count = self.monitor_anomalies()
+        
+        print(f"\n🚨 Anomaly Detection Status:")
+        print("-" * 40)
+        print(f"Total Anomalies Detected: {anomaly_count}")
+        
+        if self.last_anomaly_time:
+            time_since = datetime.now() - self.last_anomaly_time.replace(tzinfo=None)
+            if time_since.total_seconds() < 60:
+                print(f"Last Anomaly: {time_since.seconds} seconds ago")
+            else:
+                print(f"Last Anomaly: {self.last_anomaly_time.strftime('%H:%M:%S')}")
+        else:
+            print("Last Anomaly: None detected")
+        
+        # Show anomaly rate
+        if len(self.anomaly_rate_history) > 1:
+            recent_rate = np.mean(list(self.anomaly_rate_history)[-10:])
+            print(f"Recent Anomaly Rate: {recent_rate:.2f} anomalies/min")
+
+    def monitor_anomalies(self):
+        """Monitor anomaly detection in real-time"""
+        if not os.path.exists(self.results_dir):
+            return 0
+        
+        # Find anomaly files
+        anomaly_files = [f for f in os.listdir(self.results_dir) if 'anomalous_flows' in f and f.endswith('.csv')]
+        
+        total_anomalies = 0
+        latest_anomaly_time = None
+        
+        for file in anomaly_files:
+            try:
+                file_path = os.path.join(self.results_dir, file)
+                df = pd.read_csv(file_path)
+                total_anomalies += len(df)
+                
+                # Get latest anomaly timestamp
+                if 'timestamp' in df.columns and not df.empty:
+                    latest_time = pd.to_datetime(df['timestamp']).max()
+                    if latest_anomaly_time is None or latest_time > latest_anomaly_time:
+                        latest_anomaly_time = latest_time
+            except:
+                continue
+        
+        # Update anomaly tracking
+        if total_anomalies > self.anomaly_count:
+            self.last_anomaly_time = latest_anomaly_time
+            self.anomaly_count = total_anomalies
+        
+        return total_anomalies
     
     def run_summary(self):
         """Show summary of completed runs"""
